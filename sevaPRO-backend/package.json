@@ -24,12 +24,12 @@
     "mongoose": "^9.7.2",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
-    "twilio": "^6.0.2"
+    "twilio": "^6.0.2",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.0.0",
     "@typescript-eslint/eslint-plugin": "^8.62.0",
     "@typescript-eslint/parser": "^8.62.0",

@@ -9,9 +9,12 @@ async function listCategories() {
     return Category_1.Category.find({ isActive: true });
 }
 async function listProviders(serviceId) {
-    // If we wanted to filter by service, we'd need to look up which providers offer it.
-    // For now, just return all providers.
-    return User_1.User.find({ role: 'provider' }).select('-password');
+    const query = { role: 'provider' };
+    if (serviceId) {
+        // Filter providers by service if that field is available.
+        query.skills = serviceId;
+    }
+    return User_1.User.find(query).select('-password');
 }
 async function getProvider(providerId) {
     return User_1.User.findById(providerId).select('-password');
