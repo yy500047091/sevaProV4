@@ -14,6 +14,7 @@ export interface IUser extends Document {
   rating?: number;
   totalJobs?: number;
   walletBalance: number;
+  wallet?: { balance: number };
   createdAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
 }

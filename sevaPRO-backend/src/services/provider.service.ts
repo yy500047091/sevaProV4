@@ -6,9 +6,12 @@ export async function listCategories() {
 }
 
 export async function listProviders(serviceId?: string) {
-  // If we wanted to filter by service, we'd need to look up which providers offer it.
-  // For now, just return all providers.
-  return User.find({ role: 'provider' }).select('-password');
+  const query: any = { role: 'provider' };
+  if (serviceId) {
+    // Filter providers by service if that field is available.
+    query.skills = serviceId;
+  }
+  return User.find(query).select('-password');
 }
 
 export async function getProvider(providerId: string) {
