@@ -5,74 +5,91 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendOtp = sendOtp;
 exports.verifyOtp = verifyOtp;
-exports.getUserByToken = getUserByToken;
+exports.loginWithPassword = loginWithPassword;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const env_1 = require("../config/env");
-const users = new Map();
-const otps = new Map();
-const defaultAddress = {
-    line1: '221B Baker Street',
-    city: 'London',
-    state: 'London',
-    pincode: 'NW16XE',
-    lat: 28.6139,
-    lng: 77.209,
-};
-function userKey(phone, role) {
-    return `${role}:${phone}`;
+const User_1 = require("../models/User");
+// In-memory OTP store: phone -> { otp, expiresAt }
+const otpStore = new Map();
+const DEV_OTP = '248637';
+const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function signToken(user) {
+    return jsonwebtoken_1.default.sign({ sub: user._id.toString(), role: user.role }, env_1.env.jwtSecret, { expiresIn: env_1.env.jwtExpiresIn });
 }
-function createUser(phone, role) {
-    const suffix = phone.slice(-4);
-    return {
-        id: `usr_${role}_${suffix}`,
-        phone,
-        name: role === 'worker' ? 'Amit Kumar' : 'Rohit Sharma',
-        role,
-        addresses: [defaultAddress],
-        wallet: { balance: role === 'worker' ? 5680 : 150 },
-        createdAt: new Date().toISOString(),
-    };
+function signRefreshToken(user) {
+    return jsonwebtoken_1.default.sign({ sub: user._id.toString(), role: user.role }, env_1.env.jwtSecret, { expiresIn: '30d' });
 }
-function sendOtp(phone, role = 'customer') {
-    const code = process.env.NODE_ENV === 'production'
+// ---------------------------------------------------------------------------
+// OTP flow (customer phone login)
+// ---------------------------------------------------------------------------
+function sendOtp(phone) {
+    if (!phone || phone.trim().length === 0) {
+        throw new Error('A valid phone number is required.');
+    }
+    // In production you would call an SMS gateway here.
+    // For non-production we use the hardcoded OTP.
+    const otp = env_1.env.nodeEnv === 'production'
         ? String(Math.floor(100000 + Math.random() * 900000))
-        : '248637';
-    otps.set(userKey(phone, role), {
-        code,
-        role,
-        expiresAt: Date.now() + 5 * 60 * 1000,
-    });
-    return {
-        message: 'OTP generated successfully.',
-        expiresIn: 300,
-        devOtp: code,
+        : DEV_OTP;
+    otpStore.set(phone.trim(), { otp, expiresAt: Date.now() + OTP_TTL_MS });
+    console.log(`[OTP] Sent OTP ${otp} to ${phone}`);
+    const result = {
+        message: `OTP sent to ${phone}.`,
     };
+    if (env_1.env.nodeEnv !== 'production') {
+        result.devOtp = otp;
+    }
+    return result;
 }
-function verifyOtp(phone, otp, role = 'customer') {
-    const key = userKey(phone, role);
-    const record = otps.get(key);
-    if (!record || record.expiresAt < Date.now()) {
-        throw new Error('OTP expired. Please request a new code.');
+async function verifyOtp(phone, otp) {
+    const normalised = phone.trim();
+    const entry = otpStore.get(normalised);
+    if (!entry) {
+        throw new Error('No OTP requested for this phone number.');
     }
-    if (record.code !== otp) {
-        throw new Error('Invalid verification code.');
+    if (Date.now() > entry.expiresAt) {
+        otpStore.delete(normalised);
+        throw new Error('OTP has expired. Please request a new one.');
     }
-    let user = users.get(key);
+    if (entry.otp !== otp.trim()) {
+        throw new Error('Invalid OTP. Please try again.');
+    }
+    // OTP verified — remove from store
+    otpStore.delete(normalised);
+    // Upsert customer user
+    let user = await User_1.User.findOne({ phone: normalised });
     if (!user) {
-        user = createUser(phone, role);
-        users.set(key, user);
+        user = await User_1.User.create({
+            name: `Customer ${normalised.slice(-4)}`,
+            phone: normalised,
+            role: 'customer',
+        });
     }
-    otps.delete(key);
-    const accessToken = jsonwebtoken_1.default.sign({ sub: user.id, phone: user.phone, role: user.role }, env_1.env.jwtSecret, { expiresIn: env_1.env.jwtExpiresIn });
-    const refreshToken = jsonwebtoken_1.default.sign({ sub: user.id, phone: user.phone, role: user.role, type: 'refresh' }, env_1.env.jwtSecret, { expiresIn: '30d' });
+    const accessToken = signToken(user);
+    const refreshToken = signRefreshToken(user);
     return { accessToken, refreshToken, user };
 }
-function getUserByToken(token) {
-    const decoded = jsonwebtoken_1.default.verify(token, env_1.env.jwtSecret);
-    const user = users.get(userKey(decoded.phone, decoded.role));
+// ---------------------------------------------------------------------------
+// Email + password login (admin / provider only)
+// ---------------------------------------------------------------------------
+async function loginWithPassword(email, password) {
+    const normalised = email.trim().toLowerCase();
+    const user = await User_1.User.findOne({ email: normalised });
     if (!user) {
-        throw new Error('Authenticated user was not found.');
+        throw new Error('Invalid email or password.');
     }
-    return user;
+    if (user.role !== 'admin' && user.role !== 'provider') {
+        throw new Error('This login method is only available for admin and provider accounts.');
+    }
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+        throw new Error('Invalid email or password.');
+    }
+    const accessToken = signToken(user);
+    const refreshToken = signRefreshToken(user);
+    return { accessToken, refreshToken, user };
 }
 //# sourceMappingURL=auth.service.js.map

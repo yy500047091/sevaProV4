@@ -10,6 +10,7 @@ const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
 const database_1 = require("./config/database");
 const env_1 = require("./config/env");
+const seed_1 = require("./config/seed");
 const errorHandler_1 = require("./middleware/errorHandler");
 const routes_1 = __importDefault(require("./routes"));
 const notification_socket_1 = require("./sockets/notification.socket");
@@ -36,6 +37,7 @@ io.on('connection', (socket) => {
 });
 async function bootstrap() {
     await (0, database_1.connectDatabase)();
+    await (0, seed_1.seedDatabase)();
     server.listen(env_1.env.port, () => {
         console.log(`ServeEase API running on http://localhost:${env_1.env.port}`);
     });

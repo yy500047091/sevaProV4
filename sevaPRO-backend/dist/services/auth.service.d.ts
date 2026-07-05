@@ -1,13 +1,16 @@
-import { UserProfile, UserRole } from '../types';
-export declare function sendOtp(phone: string, role?: UserRole): {
+import { IUser } from '../models/User';
+export declare function sendOtp(phone: string): {
     message: string;
-    expiresIn: number;
-    devOtp: string;
+    devOtp?: string;
 };
-export declare function verifyOtp(phone: string, otp: string, role?: UserRole): {
+export declare function verifyOtp(phone: string, otp: string): Promise<{
     accessToken: string;
     refreshToken: string;
-    user: UserProfile;
-};
-export declare function getUserByToken(token: string): UserProfile;
+    user: IUser;
+}>;
+export declare function loginWithPassword(email: string, password: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: IUser;
+}>;
 //# sourceMappingURL=auth.service.d.ts.map

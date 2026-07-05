@@ -7,11 +7,8 @@ exports.connectDatabase = connectDatabase;
 const mongoose_1 = __importDefault(require("mongoose"));
 const env_1 = require("./env");
 async function connectDatabase() {
-    if (!env_1.env.useMongo || !env_1.env.mongodbUri) {
-        console.log('MongoDB disabled. Using in-memory development store.');
-        return;
-    }
-    await mongoose_1.default.connect(env_1.env.mongodbUri);
+    const uri = env_1.env.mongodbUri || 'mongodb://127.0.0.1:27017/sevaPro';
+    await mongoose_1.default.connect(uri);
     console.log('MongoDB connected.');
 }
 //# sourceMappingURL=database.js.map

@@ -14,12 +14,8 @@ function getLocation(bookingId) {
 }
 function normalizeStatus(status) {
     const allowed = [
-        'pending_payment',
-        'confirmed',
-        'worker_assigned',
-        'en_route',
-        'arrived',
-        'in_progress',
+        'pending',
+        'assigned',
         'completed',
         'cancelled',
     ];

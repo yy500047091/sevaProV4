@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.walletController = walletController;
 function walletController(req, res) {
     res.json({
-        wallet: req.user?.wallet || { balance: 0 },
+        wallet: { balance: req.user?.walletBalance || 0 },
         transactions: [
             { id: 'txn_1', label: 'Deep Cleaning', amount: -469, date: 'Today' },
             { id: 'txn_2', label: 'Referral Credit', amount: 150, date: 'Yesterday' },
