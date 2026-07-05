@@ -4,6 +4,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { connectDatabase } from './config/database';
 import { env } from './config/env';
+import { seedDatabase } from './config/seed';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import routes from './routes';
 import { registerNotificationSocket } from './sockets/notification.socket';
@@ -31,6 +32,7 @@ io.on('connection', (socket) => {
 
 async function bootstrap() {
   await connectDatabase();
+  await seedDatabase();
   server.listen(env.port, () => {
     console.log(`ServeEase API running on http://localhost:${env.port}`);
   });

@@ -1,94 +1,128 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
-import { UserProfile, UserRole } from '../types';
+import { IUser, User } from '../models/User';
 
-const users = new Map<string, UserProfile>();
-const otps = new Map<string, { code: string; expiresAt: number; role: UserRole }>();
+// In-memory OTP store: phone -> { otp, expiresAt }
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();
 
-const defaultAddress = {
-  line1: '221B Baker Street',
-  city: 'London',
-  state: 'London',
-  pincode: 'NW16XE',
-  lat: 28.6139,
-  lng: 77.209,
-};
+const DEV_OTP = '248637';
+const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-function userKey(phone: string, role: UserRole) {
-  return `${role}:${phone}`;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function signToken(user: IUser): string {
+  return jwt.sign(
+    { sub: user._id.toString(), role: user.role },
+    env.jwtSecret,
+    { expiresIn: env.jwtExpiresIn } as jwt.SignOptions,
+  );
 }
 
-function createUser(phone: string, role: UserRole): UserProfile {
-  const suffix = phone.slice(-4);
-  return {
-    id: `usr_${role}_${suffix}`,
-    phone,
-    name: role === 'worker' ? 'Amit Kumar' : 'Rohit Sharma',
-    role,
-    addresses: [defaultAddress],
-    wallet: { balance: role === 'worker' ? 5680 : 150 },
-    createdAt: new Date().toISOString(),
-  };
+function signRefreshToken(user: IUser): string {
+  return jwt.sign(
+    { sub: user._id.toString(), role: user.role },
+    env.jwtSecret,
+    { expiresIn: '30d' } as jwt.SignOptions,
+  );
 }
 
-export function sendOtp(phone: string, role: UserRole = 'customer') {
-  const code = process.env.NODE_ENV === 'production'
+// ---------------------------------------------------------------------------
+// OTP flow (customer phone login)
+// ---------------------------------------------------------------------------
+
+export function sendOtp(phone: string): { message: string; devOtp?: string } {
+  if (!phone || phone.trim().length === 0) {
+    throw new Error('A valid phone number is required.');
+  }
+
+  // In production you would call an SMS gateway here.
+  // For non-production we use the hardcoded OTP.
+  const otp = env.nodeEnv === 'production'
     ? String(Math.floor(100000 + Math.random() * 900000))
-    : '248637';
+    : DEV_OTP;
 
-  otps.set(userKey(phone, role), {
-    code,
-    role,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+  otpStore.set(phone.trim(), { otp, expiresAt: Date.now() + OTP_TTL_MS });
 
-  return {
-    message: 'OTP generated successfully.',
-    expiresIn: 300,
-    devOtp: code,
+  console.log(`[OTP] Sent OTP ${otp} to ${phone}`);
+
+  const result: { message: string; devOtp?: string } = {
+    message: `OTP sent to ${phone}.`,
   };
+
+  if (env.nodeEnv !== 'production') {
+    result.devOtp = otp;
+  }
+
+  return result;
 }
 
-export function verifyOtp(phone: string, otp: string, role: UserRole = 'customer') {
-  const key = userKey(phone, role);
-  const record = otps.get(key);
+export async function verifyOtp(
+  phone: string,
+  otp: string,
+): Promise<{ accessToken: string; refreshToken: string; user: IUser }> {
+  const normalised = phone.trim();
+  const entry = otpStore.get(normalised);
 
-  if (!record || record.expiresAt < Date.now()) {
-    throw new Error('OTP expired. Please request a new code.');
+  if (!entry) {
+    throw new Error('No OTP requested for this phone number.');
   }
 
-  if (record.code !== otp) {
-    throw new Error('Invalid verification code.');
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(normalised);
+    throw new Error('OTP has expired. Please request a new one.');
   }
 
-  let user = users.get(key);
+  if (entry.otp !== otp.trim()) {
+    throw new Error('Invalid OTP. Please try again.');
+  }
+
+  // OTP verified — remove from store
+  otpStore.delete(normalised);
+
+  // Upsert customer user
+  let user = await User.findOne({ phone: normalised });
   if (!user) {
-    user = createUser(phone, role);
-    users.set(key, user);
+    user = await User.create({
+      name: `Customer ${normalised.slice(-4)}`,
+      phone: normalised,
+      role: 'customer',
+    });
   }
 
-  otps.delete(key);
-
-  const accessToken = jwt.sign(
-    { sub: user.id, phone: user.phone, role: user.role },
-    env.jwtSecret,
-    { expiresIn: env.jwtExpiresIn as jwt.SignOptions['expiresIn'] },
-  );
-
-  const refreshToken = jwt.sign(
-    { sub: user.id, phone: user.phone, role: user.role, type: 'refresh' },
-    env.jwtSecret,
-    { expiresIn: '30d' },
-  );
+  const accessToken = signToken(user);
+  const refreshToken = signRefreshToken(user);
 
   return { accessToken, refreshToken, user };
 }
 
-export function getUserByToken(token: string): UserProfile {
-  const decoded = jwt.verify(token, env.jwtSecret) as { phone: string; role: UserRole };
-  const user = users.get(userKey(decoded.phone, decoded.role));
+// ---------------------------------------------------------------------------
+// Email + password login (admin / provider only)
+// ---------------------------------------------------------------------------
+
+export async function loginWithPassword(
+  email: string,
+  password: string,
+): Promise<{ accessToken: string; refreshToken: string; user: IUser }> {
+  const normalised = email.trim().toLowerCase();
+
+  const user = await User.findOne({ email: normalised });
   if (!user) {
-    throw new Error('Authenticated user was not found.');
+    throw new Error('Invalid email or password.');
   }
-  return user;
+
+  if (user.role !== 'admin' && user.role !== 'provider') {
+    throw new Error('This login method is only available for admin and provider accounts.');
+  }
+
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    throw new Error('Invalid email or password.');
+  }
+
+  const accessToken = signToken(user);
+  const refreshToken = signRefreshToken(user);
+
+  return { accessToken, refreshToken, user };
 }

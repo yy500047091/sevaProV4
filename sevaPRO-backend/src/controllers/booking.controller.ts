@@ -1,81 +1,92 @@
 import { Response } from 'express';
 import {
   createBooking,
-  getBooking,
-  listCustomerBookings,
-  listProviderBookings,
-  markBookingPaid,
-  seedBookings,
-  seedProviderBookings,
-  updateBookingStatus,
+  getCustomerBookings,
+  getAllBookings,
+  getProviderBookings,
+  assignProvider,
+  completeBooking,
+  getAdminStats,
+  getAllProviders,
 } from '../services/booking.service';
-import { createPaymentOrder, verifyPaymentSignature } from '../services/payment.service';
-import { normalizeStatus } from '../services/tracking.service';
 import { AuthenticatedRequest } from '../types';
 
-export function createBookingController(req: AuthenticatedRequest, res: Response) {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Unauthorized.' });
-  }
-
-  const booking = createBooking({
-    customerId: req.user.id,
-    serviceId: req.body.serviceId,
-    subServiceId: req.body.subServiceId,
-    scheduledAt: req.body.scheduledAt,
-    address: req.body.address,
-    couponCode: req.body.couponCode,
-  });
-
-  res.status(201).json({
-    booking,
-    paymentParams: createPaymentOrder(booking.bookingId, booking.pricing.total),
-  });
-}
-
-export function customerBookingsController(req: AuthenticatedRequest, res: Response) {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Unauthorized.' });
-  }
-  seedBookings(req.user.id);
-  res.json({ bookings: listCustomerBookings(req.user.id) });
-}
-
-export function workerBookingsController(req: AuthenticatedRequest, res: Response) {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Unauthorized.' });
-  }
-  seedProviderBookings('pro_amit');
-  res.json({ bookings: listProviderBookings('pro_amit') });
-}
-
-export function bookingDetailsController(req: AuthenticatedRequest, res: Response) {
+export async function createBookingController(req: AuthenticatedRequest, res: Response) {
   try {
-    res.json({ booking: getBooking(String(req.params.bookingId)) });
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized.' });
+    const booking = await createBooking({
+      customerId: req.user._id.toString(),
+      serviceId: req.body.serviceId,
+      address: req.body.address,
+      scheduledAt: req.body.scheduledAt,
+    });
+    res.status(201).json({ booking });
   } catch (error) {
-    res.status(404).json({ error: error instanceof Error ? error.message : 'Booking not found.' });
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Booking failed.' });
   }
 }
 
-export function verifyPaymentController(req: AuthenticatedRequest, res: Response) {
+export async function customerBookingsController(req: AuthenticatedRequest, res: Response) {
   try {
-    const ok = verifyPaymentSignature();
-    if (!ok) {
-      return res.status(400).json({ error: 'Payment signature verification failed.' });
-    }
-    const booking = markBookingPaid(req.body.bookingId);
-    return res.json({ booking });
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized.' });
+    const bookings = await getCustomerBookings(req.user._id.toString());
+    res.json({ bookings });
   } catch (error) {
-    return res.status(400).json({ error: error instanceof Error ? error.message : 'Payment failed.' });
+    res.status(500).json({ error: 'Failed to fetch bookings.' });
   }
 }
 
-export function updateBookingStatusController(req: AuthenticatedRequest, res: Response) {
+export async function adminBookingsController(req: AuthenticatedRequest, res: Response) {
   try {
-    const status = normalizeStatus(req.body.status);
-    const booking = updateBookingStatus(String(req.params.bookingId), status);
-    return res.json({ booking });
+    const bookings = await getAllBookings();
+    res.json({ bookings });
   } catch (error) {
-    return res.status(400).json({ error: error instanceof Error ? error.message : 'Status update failed.' });
+    res.status(500).json({ error: 'Failed to fetch bookings.' });
+  }
+}
+
+export async function providerBookingsController(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized.' });
+    const bookings = await getProviderBookings(req.user._id.toString());
+    res.json({ bookings });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch bookings.' });
+  }
+}
+
+export async function assignProviderController(req: AuthenticatedRequest, res: Response) {
+  try {
+    const booking = await assignProvider(String(req.params.id), req.body.providerId);
+    res.json({ booking });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Assignment failed.' });
+  }
+}
+
+export async function completeBookingController(req: AuthenticatedRequest, res: Response) {
+  try {
+    const booking = await completeBooking(String(req.params.id));
+    res.json({ booking });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Completion failed.' });
+  }
+}
+
+export async function adminStatsController(_req: AuthenticatedRequest, res: Response) {
+  try {
+    const stats = await getAdminStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch stats.' });
+  }
+}
+
+export async function allProvidersController(_req: AuthenticatedRequest, res: Response) {
+  try {
+    const providers = await getAllProviders();
+    res.json({ providers });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch providers.' });
   }
 }

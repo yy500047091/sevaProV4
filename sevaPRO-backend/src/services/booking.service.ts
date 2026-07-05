@@ -1,151 +1,78 @@
-import { Address, Booking, BookingPricing, BookingStatus } from '../types';
-import { providers } from './provider.service';
+import mongoose from 'mongoose';
+import { Booking } from '../models/Booking';
+import { User } from '../models/User';
 
-const bookings = new Map<string, Booking>();
-
-const basePrices: Record<string, number> = {
-  cat_cleaning: 350,
-  cat_plumbing: 299,
-  cat_electrical: 249,
-  cat_appliances: 399,
-  cat_carpentry: 349,
-  cat_painting: 499,
-  cat_pest: 599,
-  cat_moving: 799,
-  cat_salon: 299,
-  cat_ac: 449,
-  cat_interior: 699,
-  plumbing: 299,
-  electrical: 249,
-  cleaning: 350,
-  ac_repair: 449,
-  salon: 299,
-};
-
-function makeId(prefix: string) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-}
-
-function calculatePricing(serviceId: string, couponCode?: string): BookingPricing {
-  const base = basePrices[serviceId] || 350;
-  const platformFee = 49;
-  const discount = couponCode === 'WELCOME100' ? 100 : 0;
-  const taxable = Math.max(0, base + platformFee - discount);
-  const gst = Math.round(taxable * 0.18);
-
-  return { base, platformFee, gst, discount, total: taxable + gst };
-}
-
-export function createBooking(input: {
+export async function createBooking(input: {
   customerId: string;
   serviceId: string;
-  subServiceId: string;
+  address: string;
   scheduledAt: string;
-  address: Address;
-  couponCode?: string;
 }) {
-  const now = new Date().toISOString();
-  const provider = providers.find((item) => item.skills.includes(input.serviceId)) || providers[0];
-  const booking: Booking = {
-    id: makeId('mongo'),
-    bookingId: makeId('book'),
-    customerId: input.customerId,
-    providerId: provider.id,
-    serviceId: input.serviceId,
-    subServiceId: input.subServiceId,
-    scheduledAt: input.scheduledAt,
+  const otp = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit OTP
+  
+  const booking = await Booking.create({
+    customer: new mongoose.Types.ObjectId(input.customerId),
+    service: new mongoose.Types.ObjectId(input.serviceId),
     address: input.address,
-    status: 'pending_payment',
-    otp: '248637',
-    couponCode: input.couponCode,
-    pricing: calculatePricing(input.serviceId, input.couponCode),
+    scheduledAt: new Date(input.scheduledAt),
+    status: 'pending',
     paymentStatus: 'pending',
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  bookings.set(booking.bookingId, booking);
-  return booking;
-}
-
-export function listCustomerBookings(customerId: string) {
-  return Array.from(bookings.values())
-    .filter((booking) => booking.customerId === customerId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function listProviderBookings(providerId: string) {
-  return Array.from(bookings.values())
-    .filter((booking) => booking.providerId === providerId || booking.status === 'confirmed')
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function getBooking(bookingId: string) {
-  const booking = bookings.get(bookingId);
-  if (!booking) {
-    throw new Error('Booking not found.');
-  }
-  return booking;
-}
-
-export function updateBookingStatus(bookingId: string, status: BookingStatus) {
-  const booking = getBooking(bookingId);
-  booking.status = status;
-  booking.updatedAt = new Date().toISOString();
-  bookings.set(booking.bookingId, booking);
-  return booking;
-}
-
-export function markBookingPaid(bookingId: string) {
-  const booking = getBooking(bookingId);
-  booking.paymentStatus = 'paid';
-  booking.status = 'worker_assigned';
-  booking.updatedAt = new Date().toISOString();
-  bookings.set(booking.bookingId, booking);
-  return booking;
-}
-
-export function seedBookings(customerId: string) {
-  if (listCustomerBookings(customerId).length > 0) {
-    return;
-  }
-
-  createBooking({
-    customerId,
-    serviceId: 'cat_cleaning',
-    subServiceId: 'deep_cleaning',
-    scheduledAt: new Date(Date.now() + 86400000).toISOString(),
-    address: {
-      line1: '221B Baker Street',
-      city: 'London',
-      state: 'London',
-      pincode: 'NW16XE',
-      lat: 28.6139,
-      lng: 77.209,
-    },
+    otp,
   });
+  return booking.populate(['customer', 'service', 'provider']);
 }
 
-export function seedProviderBookings(providerId: string) {
-  if (listProviderBookings(providerId).length > 0) {
-    return;
-  }
+export async function getCustomerBookings(customerId: string) {
+  return Booking.find({ customer: customerId })
+    .populate('service', 'name price duration icon')
+    .populate('provider', 'name phone')
+    .sort({ createdAt: -1 });
+}
 
-  const booking = createBooking({
-    customerId: 'usr_customer_demo',
-    serviceId: 'cat_cleaning',
-    subServiceId: 'deep_cleaning',
-    scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    address: {
-      line1: 'Flat 405, Green Heights',
-      city: 'London',
-      state: 'London',
-      pincode: 'NW16XE',
-      lat: 28.6139,
-      lng: 77.209,
-    },
-  });
-  booking.providerId = providerId;
-  booking.status = 'worker_assigned';
-  booking.paymentStatus = 'paid';
+export async function getAllBookings() {
+  return Booking.find({ status: { $in: ['pending', 'assigned'] } })
+    .populate('customer', 'name phone')
+    .populate('service', 'name price icon')
+    .populate('provider', 'name phone')
+    .sort({ createdAt: -1 });
+}
+
+export async function getProviderBookings(providerId: string) {
+  return Booking.find({ provider: providerId, status: 'assigned' })
+    .populate('customer', 'name phone')
+    .populate('service', 'name price duration icon')
+    .sort({ createdAt: -1 });
+}
+
+export async function assignProvider(bookingId: string, providerId: string) {
+  const booking = await Booking.findByIdAndUpdate(
+    bookingId,
+    { provider: new mongoose.Types.ObjectId(providerId), status: 'assigned' },
+    { new: true }
+  ).populate(['customer', 'service', 'provider']);
+  if (!booking) throw new Error('Booking not found.');
+  return booking;
+}
+
+export async function completeBooking(bookingId: string) {
+  const booking = await Booking.findByIdAndUpdate(
+    bookingId,
+    { status: 'completed', paymentStatus: 'paid' },
+    { new: true }
+  ).populate(['customer', 'service', 'provider']);
+  if (!booking) throw new Error('Booking not found.');
+  return booking;
+}
+
+export async function getAdminStats() {
+  const completed = await Booking.find({ status: 'completed' }).populate('service', 'price');
+  const totalRevenue = completed.reduce((sum, b) => {
+    const svc = b.service as any;
+    return sum + (svc?.price || 0);
+  }, 0);
+  return { totalCompleted: completed.length, totalRevenue };
+}
+
+export async function getAllProviders() {
+  return User.find({ role: 'provider' }, 'name phone email');
 }

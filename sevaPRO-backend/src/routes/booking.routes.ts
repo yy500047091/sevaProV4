@@ -1,25 +1,33 @@
 import { Router } from 'express';
 import {
-  bookingDetailsController,
   createBookingController,
   customerBookingsController,
-  updateBookingStatusController,
-  verifyPaymentController,
-  workerBookingsController,
+  adminBookingsController,
+  providerBookingsController,
+  assignProviderController,
+  completeBookingController,
+  adminStatsController,
+  allProvidersController,
 } from '../controllers/booking.controller';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireRole } from '../middleware/auth';
 import { requireFields } from '../middleware/validation';
-import { walletController } from '../controllers/payment.controller';
 
 const router = Router();
 
 router.use(authenticate);
-router.post('/', requireFields(['serviceId', 'subServiceId', 'scheduledAt', 'address']), createBookingController);
-router.get('/customer', customerBookingsController);
-router.get('/worker', workerBookingsController);
-router.get('/wallet', walletController);
-router.post('/payment-verify', requireFields(['bookingId']), verifyPaymentController);
-router.get('/:bookingId', bookingDetailsController);
-router.patch('/:bookingId/status', requireFields(['status']), updateBookingStatusController);
+
+// Customer
+router.post('/', requireRole('customer'), requireFields(['serviceId', 'address', 'scheduledAt']), createBookingController);
+router.get('/customer', requireRole('customer'), customerBookingsController);
+
+// Admin
+router.get('/admin', requireRole('admin'), adminBookingsController);
+router.get('/stats', requireRole('admin'), adminStatsController);
+router.get('/providers', requireRole('admin'), allProvidersController);
+router.put('/:id/assign', requireRole('admin'), requireFields(['providerId']), assignProviderController);
+
+// Provider
+router.get('/provider', requireRole('provider'), providerBookingsController);
+router.patch('/:id/complete', requireRole('provider'), completeBookingController);
 
 export default router;

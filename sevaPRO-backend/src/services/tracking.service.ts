@@ -14,12 +14,8 @@ export function getLocation(bookingId: string) {
 
 export function normalizeStatus(status: string): BookingStatus {
   const allowed: BookingStatus[] = [
-    'pending_payment',
-    'confirmed',
-    'worker_assigned',
-    'en_route',
-    'arrived',
-    'in_progress',
+    'pending',
+    'assigned',
     'completed',
     'cancelled',
   ];

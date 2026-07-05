@@ -1,22 +1,32 @@
 import { Request, Response } from 'express';
-import { sendOtp, verifyOtp } from '../services/auth.service';
-import { UserRole } from '../types';
+import { sendOtp, verifyOtp, loginWithPassword } from '../services/auth.service';
 
-export function sendOtpController(req: Request, res: Response) {
-  const { phone, role = 'customer' } = req.body as { phone: string; role?: UserRole };
-  const result = sendOtp(phone, role);
-  res.json(result);
+export async function sendOtpController(req: Request, res: Response) {
+  try {
+    const { phone } = req.body as { phone: string };
+    const result = sendOtp(phone);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to send OTP.' });
+  }
 }
 
-export function verifyOtpController(req: Request, res: Response) {
+export async function verifyOtpController(req: Request, res: Response) {
   try {
-    const { phone, otp, role = 'customer' } = req.body as {
-      phone: string;
-      otp: string;
-      role?: UserRole;
-    };
-    res.json(verifyOtp(phone, otp, role));
+    const { phone, otp } = req.body as { phone: string; otp: string };
+    const result = await verifyOtp(phone, otp);
+    res.json(result);
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'OTP verification failed.' });
+  }
+}
+
+export async function loginController(req: Request, res: Response) {
+  try {
+    const { email, password } = req.body as { email: string; password: string };
+    const result = await loginWithPassword(email, password);
+    res.json(result);
+  } catch (error) {
+    res.status(401).json({ error: error instanceof Error ? error.message : 'Login failed.' });
   }
 }
