@@ -15,18 +15,19 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "firebase-admin": "^14.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.2",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
-    "twilio": "^6.0.2",
-    "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10"
+    "twilio": "^6.0.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

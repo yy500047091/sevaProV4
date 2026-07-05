@@ -1,32 +1,62 @@
 import { Request, Response } from 'express';
-import { sendOtp, verifyOtp, loginWithPassword } from '../services/auth.service';
+import {
+  sendOtp,
+  verifyOtp,
+  loginWithPassword,
+} from '../services/auth.service';
+
+// ---------------------------------------------------------------------------
+// Customer Phone Login
+// ---------------------------------------------------------------------------
 
 export async function sendOtpController(req: Request, res: Response) {
   try {
     const { phone } = req.body as { phone: string };
-    const result = sendOtp(phone);
+
+    const result = await sendOtp(phone);
+
     res.json(result);
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to send OTP.' });
+    res.status(400).json({
+      error: error instanceof Error ? error.message : 'Failed to send OTP.',
+    });
   }
 }
 
 export async function verifyOtpController(req: Request, res: Response) {
   try {
-    const { phone, otp } = req.body as { phone: string; otp: string };
-    const result = await verifyOtp(phone, otp);
+    const { idToken } = req.body as { idToken: string };
+
+    const result = await verifyOtp(idToken);
+
     res.json(result);
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'OTP verification failed.' });
+    res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : 'OTP verification failed.',
+    });
   }
 }
 
+// ---------------------------------------------------------------------------
+// Admin / Provider Login
+// ---------------------------------------------------------------------------
+
 export async function loginController(req: Request, res: Response) {
   try {
-    const { email, password } = req.body as { email: string; password: string };
+    const { email, password } = req.body as {
+      email: string;
+      password: string;
+    };
+
     const result = await loginWithPassword(email, password);
+
     res.json(result);
   } catch (error) {
-    res.status(401).json({ error: error instanceof Error ? error.message : 'Login failed.' });
+    res.status(401).json({
+      error: error instanceof Error ? error.message : 'Login failed.',
+    });
   }
 }
