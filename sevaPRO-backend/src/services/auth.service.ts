@@ -88,7 +88,40 @@ export async function verifyOtp(
     user,
   };
 }
+// ---------------------------------------------------------------------------
+// Development Login (Temporary)
+// ---------------------------------------------------------------------------
 
+export async function devLogin(
+  phone: string,
+): Promise<{
+  accessToken: string;
+  refreshToken: string;
+  user: IUser;
+}> {
+
+  if (!phone || phone.trim().length === 0) {
+    throw new Error('Phone number is required.');
+  }
+
+  const normalised = phone.trim();
+
+  let user = await User.findOne({ phone: normalised });
+
+  if (!user) {
+    user = await User.create({
+      name: `Customer ${normalised.slice(-4)}`,
+      phone: normalised,
+      role: 'customer',
+    });
+  }
+
+  return {
+    accessToken: signToken(user),
+    refreshToken: signRefreshToken(user),
+    user,
+  };
+}
 // ---------------------------------------------------------------------------
 // Email + Password Login (Admin / Provider)
 // ---------------------------------------------------------------------------

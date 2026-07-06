@@ -3,6 +3,7 @@ import {
   sendOtpController,
   verifyOtpController,
   loginController,
+  devLoginController,
 } from '../controllers/auth.controller';
 import { requireFields } from '../middleware/validation';
 
@@ -21,7 +22,11 @@ router.post(
   requireFields(['idToken']),
   verifyOtpController,
 );
-
+router.post(
+  '/dev-login',
+  requireFields(['phone']),
+  devLoginController,
+);
 // Admin / Provider login
 router.post(
   '/login',

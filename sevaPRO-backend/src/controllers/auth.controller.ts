@@ -3,8 +3,8 @@ import {
   sendOtp,
   verifyOtp,
   loginWithPassword,
+  devLogin,
 } from '../services/auth.service';
-
 // ---------------------------------------------------------------------------
 // Customer Phone Login
 // ---------------------------------------------------------------------------
@@ -39,7 +39,22 @@ export async function verifyOtpController(req: Request, res: Response) {
     });
   }
 }
+export async function devLoginController(req: Request, res: Response) {
+  try {
+    const { phone } = req.body as { phone: string };
 
+    const result = await devLogin(phone);
+
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Development login failed.',
+    });
+  }
+}
 // ---------------------------------------------------------------------------
 // Admin / Provider Login
 // ---------------------------------------------------------------------------
